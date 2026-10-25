@@ -1,95 +1,58 @@
-# PaissaHouse
+# PaissaHouse (TW)
 
-[![Discord](https://img.shields.io/discord/927834873916440646?color=5865F2&label=discord&logo=discord&logoColor=white)](https://discord.gg/9rduk8aDek)
+[PaissaHouse](https://github.com/zhudotexe/FFXIV_PaissaHouse) 的 FFXIV 台服（繁中）移植版。
 
-Looking for that perfect house? PaissaHouse lets you receive notifications when a new plot of land is up for sale on
-your home world, and contribute to PaissaDB when viewing housing wards at a city aetheryte/ferry.
+原版會把巡房資料上傳到 PaissaDB，並透過雲端推播其他伺服器的空地通知。PaissaDB 不收台服資料，所以這個版本**拿掉所有雲端連線**，改成把資料存在自己電腦上，並提供遊戲內清單視窗與 CSV 匯出。
 
-You can view the list of all plots available on a world at https://paissadb.zhu.codes/.
+## 版本資訊
 
-## Installation
+| 項目 | 內容 |
+|---|---|
+| 基於 | 原版 v1.4.8.0，commit `b973a5eeb136a2de99c0a77c5c7b9d5e7e180475`（2025-08-11） |
+| Dalamud API | 13（`Dalamud.NET.Sdk/13.0.0`） |
+| 分支 | `tw-api13` |
 
-PaissaHouse is a Dalamud plugin, and should be installed
-using [XIVLauncher](https://github.com/goatcorp/FFXIVQuickLauncher).
-*Installing the plugin using the GitHub Releases tab or by downloading the code is not recommended or supported.*
+## 功能
 
-If PaissaHouse does not appear under the list of available plugins, ensure that plugin testing is enabled in your
-plugins settings menu.
+- **巡房紀錄**：在以太之光或渡船選「前往住宅區」翻看各區清單時，自動記錄每塊空地的區號、大小、價格、購買方式（先到先得／抽籤）與限制（部隊／個人）。
+- **抽籤紀錄**：查看空地門口的看板時，記錄抽籤狀態、參加人數與階段結束時間。
+- **聊天欄摘要**：巡完一個住宅區的全部區數後（台服目前 18 區，可在設定調整），在聊天欄列出空地清單（輸出格式與頻道可在設定中調整）。
+- **`/phouse` 空地清單視窗**：依伺服器、住宅區、大小篩選，可只看「目前可購買」，依地址／價格／抽籤人數排序。
+- **CSV 匯出**：巡完整區後自動匯出（可在設定關閉），或在清單視窗手動匯出目前篩選結果。CSV 為 UTF-8（含 BOM），可直接用 Excel 開啟。
 
-## Usage
+## 與原版的差異（程式修改）
 
-Simply install and it will happily run in the background, notifying you when a new plot of land is up for sale on your
-home world.
+- 移除 `Paissa/Client.cs`、`Events.cs`、`Schema.cs`（PaissaDB HTTP 上傳、WebSocket 推播、角色登入回報），以及 `DebounceThrottle`、`WebSocketSharp.Standard` 兩個 NuGet 套件。
+- 新增 `Paissa/LocalStore.cs`（本機儲存與 CSV）與 `HouseListWindow.cs`（清單視窗）。
+- `WardObserver`：自動偵測台服封包中 LandIdent 的位置（偏移量會寫入 log），讀不到合理資料時略過不記錄；每區區數改為設定值，預設 18。
+- `LotteryObserver`：抽籤看板特徵碼先試 7.3 之後的版本，找不到再退回 7.3 之前的版本。
+- 設定介面移除需要雲端的「Notifications: Homeworld / Datacenter / All」與各住宅區通知分頁，新增「巡完整區後自動匯出 CSV」。
+- `/phouse` 改為開啟本機清單視窗（原為 PaissaDB 網站連結）。
+- manifest 名稱加上 `(TW)`；`InternalName` 維持 `autoSweep`，原有設定不會遺失。
 
-Use `/psweep` to open configuration, if you'd like to receive notifications for other worlds or only for certain
-districts.
-
-## Contributing
-
-PaissaHouse relies on data contributions from players like you to broadcast the latest housing data.
-
-### Ward Sweeps
-
-To contribute data to PaissaDB, the API powering PaissaHouse, simply teleport to a major city aetheryte, select
-"Residential District Aethernet" -> "Go to Specified Ward (Review Tabs)" and click through the 30 wards. This is
-called "sweeping" a district.
-
-If all goes well, you'll see any new plots you found pop up in real time, and a summary of the district once you've
-clicked through the wards!
-
-<figure>
-  <img src="https://cdn.discordapp.com/attachments/263128686004404225/842268996886724648/unknown.png">
-  <figcaption>The result of tabbing through 24 wards (before patch 6.3).</figcaption>
-</figure>
-
-If you plan on sweeping the same district multiple times in a row, run `/psweep reset` between each sweep to reset the
-internal sweep cache.
-
-### Lottery Sweeps
-
-To contribute information about a plot on sale via lottery, simply view the plot's placard by teleporting to the ward,
-walking up to the plot, and right-clicking on the placard. This will help ensure that we have up-to-date lottery counts
-for each plot!
-
-## Custom Output Format
-
-If using `Custom` output format, use these variables surrounded with curly braces to customize your output (
-e.g. `{worldName}`):
-
-| Variable               | Description                                                       | Example           |
-|------------------------|-------------------------------------------------------------------|-------------------|
-| `districtName`         | The name of the housing district.                                 | Lavender Beds     |
-| `districtNameNoSpaces` | The name of the housing district, with no spaces.                 | LavenderBeds      |
-| `worldName`            | The name of the world.                                            | Diabolos          |
-| `wardNum`              | The ward number.                                                  | 30                |
-| `plotNum`              | The plot number.                                                  | 60                |
-| `housePrice`           | The price of the house as a raw number.                           | 3750000           |
-| `housePriceMillions`   | The price of the house divided by 1 million, to 3 decimal places. | 3.750             |
-| `houseSizeName`        | The name of the size of the house.                                | Medium            |
-
-Example (Pings output format):
+## 資料存放位置
 
 ```
-@{houseSizeName}{districtNameNoSpaces} {wardNum}-{plotNum} ({housePriceMillions}m)
+%APPDATA%\FFXIVSimpleLauncher\Dalamud\Config\pluginConfigs\autoSweep\
+  housing_local.json   本機資料
+  exports\             匯出的 CSV
 ```
 
-## FAQ
+- **不會**記錄其他玩家的房主名稱。
+- 清單視窗的「清除全部資料」要按住 Ctrl 再點，不會刪除已匯出的 CSV。
+- 資料只反映你自己看過的時間點；超過 24 小時的資料在清單中會以灰色顯示。
 
-### Does this plugin automatically search for houses for me?
+## 編譯
 
-**No.** It does not automate player actions in any way; it depends on other players' contributions to housing data to
-send updates on new plots.
+```bat
+set DALAMUD_HOME=%APPDATA%\FFXIVSimpleLauncher\Dalamud\Injector
+dotnet build AutoSweep.csproj -c Release
+```
 
-If you're contributing, you still have to teleport to each city, open the residential aethernet, and click through each
-tab manually. Want to contribute? Check out *Contributing*, above.
+輸出：`bin\Release\autoSweep.dll`
 
-### Why is it named PaissaHouse?
+## 原作者與授權
 
-Because it just sits there, silently, watching houses. Like a Paissa house.
+原作者 [zhudotexe (Andrew Zhu)](https://github.com/zhudotexe)，MIT License（見 `LICENSE`）。
 
-![A Paissa house.](https://img2.finalfantasyxiv.com/accimg2/88/98/8898053ff4d9416da5a1a6a31d280ba42840161a.jpg)
-
-## Acknowledgements
-
-- [Dalamud](https://github.com/goatcorp/Dalamud) and [XIVLauncher](https://github.com/goatcorp/FFXIVQuickLauncher)
-- [Universalis](https://github.com/Universalis-FFXIV/Universalis) and Sonar for inspiration
+這是非官方移植版，**使用上的問題請回報到本 repo，不要回報給原作者或 PaissaDB。**

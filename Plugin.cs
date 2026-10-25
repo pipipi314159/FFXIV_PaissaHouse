@@ -1,10 +1,9 @@
-﻿using System.Diagnostics;
+﻿using System;
 using AutoSweep.Paissa;
 using AutoSweep.Structures;
+using Dalamud.Game;
 using Dalamud.Game.Command;
 using Dalamud.Game.Text;
-using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -24,18 +23,19 @@ namespace AutoSweep {
         [PluginService] internal static IPluginLog PluginLog { get; private set; } = null!;
         [PluginService] internal static IGameInteropProvider InteropProvider { get; private set; } = null!;
         [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
+        [PluginService] internal static ISigScanner SigScanner { get; private set; } = null!;
         internal readonly Configuration Configuration;
-        internal readonly PaissaClient PaissaClient;
+        internal readonly LocalStore LocalStore;
 
         internal readonly ExcelSheet<HousingLandSet> HousingLandSets;
         internal readonly ExcelSheet<TerritoryType> Territories;
         internal readonly ExcelSheet<World> Worlds;
-        private readonly DalamudLinkPayload chatLinkPayload;
 
         // state
         private readonly WardObserver wardObserver;
         private readonly LotteryObserver lotteryObserver;
         private readonly PluginUI ui;
+        private readonly HouseListWindow houseListWindow;
 
         public Plugin() {
             // setup
@@ -44,63 +44,50 @@ namespace AutoSweep {
             Territories = DataManager.GetExcelSheet<TerritoryType>();
             Worlds = DataManager.GetExcelSheet<World>();
             HousingLandSets = DataManager.GetExcelSheet<HousingLandSet>();
+            LocalStore = new LocalStore(this);
+            houseListWindow = new HouseListWindow(this);
 
             Commands.AddHandler(Utils.HouseCommandName, new CommandInfo(OnHouseCommand) {
-                HelpMessage = "View all houses available for sale."
+                HelpMessage = "開啟本機空地清單（巡房與抽籤看板紀錄）。"
             });
             Commands.AddHandler(Utils.CommandName, new CommandInfo(OnCommand) {
                 HelpMessage =
-                    $"Configure PaissaHouse settings.\n\"{Utils.CommandName} reset\" to reset a sweep if sweeping the same district multiple times in a row."
+                    $"開啟 PaissaHouse 設定。\n\"{Utils.CommandName} reset\" 可重設巡房狀態（連續重複巡同一個住宅區時使用）。"
             });
-
-            chatLinkPayload = Chat.AddChatLinkHandler(0, OnChatLinkClick);
 
             // event hooks
             PluginInterface.UiBuilder.Draw += DrawUI;
             PluginInterface.UiBuilder.OpenConfigUi += DrawConfigUI;
-            Framework.Update += OnUpdateEvent;
-            ClientState.Login += OnLogin;
+            PluginInterface.UiBuilder.OpenMainUi += OpenMainUI;
 
-            // paissa setup
+            // observers (TW port: data is stored locally, nothing is uploaded)
             wardObserver = new WardObserver(this);
             lotteryObserver = new LotteryObserver(this);
-            PaissaClient = new PaissaClient(this);
-            PaissaClient.OnPlotOpened += OnPlotOpened;
-            PaissaClient.OnPlotUpdate += OnPlotUpdate;
 
             PluginLog.Debug($"Initialization complete: configVersion={Configuration.Version}");
         }
 
         public void Dispose() {
             ui.Dispose();
-            Framework.Update -= OnUpdateEvent;
-            ClientState.Login -= OnLogin;
+            PluginInterface.UiBuilder.Draw -= DrawUI;
+            PluginInterface.UiBuilder.OpenConfigUi -= DrawConfigUI;
+            PluginInterface.UiBuilder.OpenMainUi -= OpenMainUI;
             Commands.RemoveHandler(Utils.CommandName);
             Commands.RemoveHandler(Utils.HouseCommandName);
-            Chat.RemoveChatLinkHandler();
-            PaissaClient?.Dispose();
             lotteryObserver.Dispose();
             wardObserver.Dispose();
         }
 
         // ==== dalamud events ====
         private void OnHouseCommand(string command, string args) {
-            Chat.Print(new SeString(
-                new TextPayload("Thanks for using PaissaHouse! You can view all of the houses available for sale at "),
-                new UIForegroundPayload(710),
-                chatLinkPayload,
-                new TextPayload("https://paissadb.zhu.codes/"),
-                RawPayload.LinkTerminator,
-                new UIForegroundPayload(0),
-                new TextPayload(" (opens in browser)."))
-            );
+            houseListWindow.Visible = !houseListWindow.Visible;
         }
 
         private void OnCommand(string command, string args) {
             switch (args) {
                 case "reset":
                     wardObserver.SweepState.Reset();
-                    Chat.Print("The sweep state has been reset.");
+                    Chat.Print("巡房狀態已重設。");
                     break;
                 default:
                     ui.SettingsVisible = true;
@@ -108,75 +95,42 @@ namespace AutoSweep {
             }
         }
 
-        private void OnChatLinkClick(uint cmdId, SeString seString) {
-            Process.Start(new ProcessStartInfo {
-                FileName = "https://paissadb.zhu.codes/",
-                UseShellExecute = true
-            });
+        // ==== lumina helpers ====
+        internal string GetWorldName(uint worldId) {
+            return Worlds.TryGetRow(worldId, out World world) ? world.Name.ToString() : worldId.ToString();
         }
 
-        private void OnLogin() {
-            PaissaClient.needsHello = true;
+        internal string GetDistrictName(uint territoryTypeId) {
+            if (!Territories.TryGetRow(territoryTypeId, out TerritoryType territory)) return territoryTypeId.ToString();
+            PlaceName place = territory.PlaceName.Value;
+            return (!place.NameNoArticle.IsEmpty ? place.NameNoArticle : place.Name).ToString();
         }
 
-        private void OnUpdateEvent(IFramework f) {
-            if (ClientState?.LocalPlayer != null && PaissaClient != null && PaissaClient.needsHello) {
-                PaissaClient.needsHello = false;
-                PaissaClient.Hello();
+        /// <summary>Returns (size, initial price) of a plot (0-based plot index).</summary>
+        internal (byte size, uint initialPrice) GetPlotInfo(uint territoryTypeId, int plotIndex) {
+            try {
+                HousingLandSet landSet = HousingLandSets.GetRow(Utils.TerritoryTypeIdToLandSetId(territoryTypeId));
+                var info = landSet.LandSet[plotIndex];
+                return (info.PlotSize, info.InitialPrice);
+            }
+            catch (Exception e) {
+                PluginLog.Warning(e, $"Could not read plot info for territory {territoryTypeId} plot {plotIndex}");
+                return (255, 0);
             }
         }
-
-        // ==== paissa events ====
-        /// <summary>
-        ///     Hook to call when a new plot open event is received over the websocket.
-        /// </summary>
-        private void OnPlotOpened(object sender, PlotOpenedEventArgs e) {
-            if (e.PlotDetail == null) return;
-            bool notifEnabled = Utils.ConfigEnabledForPlot(this, e.PlotDetail.world_id, e.PlotDetail.district_id,
-                e.PlotDetail.size, e.PlotDetail.purchase_system);
-            if (!notifEnabled) return;
-            // we only notify on PlotOpen if the purchase type is FCFS or we know it is available
-            if (!((e.PlotDetail.purchase_system & PurchaseSystem.Lottery) == 0 ||
-                  e.PlotDetail.lotto_phase == AvailabilityType.Available)) return;
-            World eventWorld = Worlds.GetRow(e.PlotDetail.world_id);
-            OnFoundOpenHouse(e.PlotDetail.world_id, e.PlotDetail.district_id, e.PlotDetail.ward_number,
-                e.PlotDetail.plot_number, e.PlotDetail.price,
-                $"New plot available for purchase on {eventWorld.Name}: ");
-        }
-
-        private void OnPlotUpdate(object sender, PlotUpdateEventArgs e) {
-            if (e.PlotUpdate == null) return;
-            bool notifEnabled = Utils.ConfigEnabledForPlot(this, e.PlotUpdate.world_id, e.PlotUpdate.district_id,
-                e.PlotUpdate.size, e.PlotUpdate.purchase_system);
-            if (!notifEnabled) return;
-            // we only notify on PlotUpdate if the purchase type is lottery and it is available now and was not before
-            if (!((e.PlotUpdate.purchase_system & PurchaseSystem.Lottery) == PurchaseSystem.Lottery
-                  && e.PlotUpdate.previous_lotto_phase != AvailabilityType.Available
-                  && e.PlotUpdate.lotto_phase == AvailabilityType.Available)) return;
-            World eventWorld = Worlds.GetRow(e.PlotUpdate.world_id);
-            OnFoundOpenHouse(e.PlotUpdate.world_id, e.PlotUpdate.district_id, e.PlotUpdate.ward_number,
-                e.PlotUpdate.plot_number, e.PlotUpdate.price,
-                $"New plot available for purchase on {eventWorld.Name}: ");
-        }
-
 
         /// <summary>
         ///     Display the details of an open plot in the user's preferred format.
         /// </summary>
         internal void OnFoundOpenHouse(uint worldId, uint territoryTypeId, int wardNumber, int plotNumber, uint? price,
             string messagePrefix = "") {
-            PlaceName place = Territories.GetRow(territoryTypeId).PlaceName.Value;
-            // languages like German do not use NameNoArticle (#2)
-            var districtName =
-                !place.NameNoArticle.IsEmpty ? place.NameNoArticle : place.Name;
-            var worldName = Worlds.GetRow(worldId).Name;
+            var districtName = GetDistrictName(territoryTypeId);
+            var worldName = GetWorldName(worldId);
 
-            HousingLandSet landSet = HousingLandSets.GetRow(Utils.TerritoryTypeIdToLandSetId(territoryTypeId));
-            byte? houseSize = landSet.LandSet[plotNumber].PlotSize;
-            uint realPrice =
-                price.GetValueOrDefault(landSet.LandSet[plotNumber].InitialPrice); // if price is null, it's probably the default price (landupdate)
+            var (houseSize, initialPrice) = GetPlotInfo(territoryTypeId, plotNumber);
+            uint realPrice = price.GetValueOrDefault(initialPrice); // if price is null, it's probably the default price (landupdate)
 
-            string districtNameNoSpaces = districtName.ToString().Replace(" ", "");
+            string districtNameNoSpaces = districtName.Replace(" ", "");
             int wardNum = wardNumber + 1;
             int plotNum = plotNumber + 1;
             float housePriceMillions = realPrice / 1000000f;
@@ -194,8 +148,8 @@ namespace AutoSweep {
                     break;
                 case OutputFormat.Custom:
                     var template = $"{messagePrefix}{Configuration.OutputFormatString}";
-                    output = Utils.FormatCustomOutputString(template, districtName.ToString(), districtNameNoSpaces,
-                        worldName.ToString(), wardNum.ToString(),
+                    output = Utils.FormatCustomOutputString(template, districtName, districtNameNoSpaces,
+                        worldName, wardNum.ToString(),
                         plotNum.ToString(), realPrice.ToString(), housePriceMillions.ToString("F3"), houseSizeName);
                     break;
                 default:
@@ -219,10 +173,15 @@ namespace AutoSweep {
         // ==== UI ====
         private void DrawUI() {
             ui.Draw();
+            houseListWindow.Draw();
+        }
+
+        private void OpenMainUI() {
+            houseListWindow.Visible = true;
         }
 
         private void DrawConfigUI() {
             ui.SettingsVisible = true;
         }
     }
-}
+}

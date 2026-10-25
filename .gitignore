@@ -6,3 +6,6 @@ bin/
 packages/
 Paissa/Secrets.cs
 logs/
+
+# TW port
+build.log

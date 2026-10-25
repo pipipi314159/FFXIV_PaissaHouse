@@ -17,9 +17,9 @@ namespace AutoSweep.Paissa {
     }
 
     public class SweepState {
-        private readonly int numWardsPerDistrict;
+        private readonly Func<int> numWardsPerDistrict;
 
-        public SweepState(int numWardsPerDistrict) {
+        public SweepState(Func<int> numWardsPerDistrict) {
             this.numWardsPerDistrict = numWardsPerDistrict;
         }
 
@@ -28,7 +28,7 @@ namespace AutoSweep.Paissa {
         public DateTime SweepTime { get; private set; }
         public HashSet<int> SeenWardNumbers { get; } = new();
         public List<OpenHouse> OpenHouses { get; } = new();
-        public bool IsComplete => SeenWardNumbers.Count == numWardsPerDistrict;
+        public bool IsComplete => SeenWardNumbers.Count >= numWardsPerDistrict();
 
         /// <summary>
         ///     Returns whether or not a received WardInfo should start a new sweep.

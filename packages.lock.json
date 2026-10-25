@@ -8,23 +8,11 @@
         "resolved": "13.0.0",
         "contentHash": "Mb3cUDSK/vDPQ8gQIeuCw03EMYrej1B4J44a1AvIJ9C759p9XeqdU9Hg4WgOmlnlPe0G7ILTD32PKSUpkQNa8w=="
       },
-      "DebounceThrottle": {
-        "type": "Direct",
-        "requested": "[2.0.0, )",
-        "resolved": "2.0.0",
-        "contentHash": "tuMvwpKPawrIToz+XJvJh7zJVx1VnTOO/iMGSkw6JgT0JcZu7bJZM96CLO9JMAzECLgCOwsMHf/L+Sh0krt+0A=="
-      },
       "DotNet.ReproducibleBuilds": {
         "type": "Direct",
         "requested": "[1.2.25, )",
         "resolved": "1.2.25",
         "contentHash": "xCXiw7BCxHJ8pF6wPepRUddlh2dlQlbr81gXA72hdk4FLHkKXas7EH/n+fk5UCA/YfMqG1Z6XaPiUjDbUNBUzg=="
-      },
-      "WebSocketSharp.Standard": {
-        "type": "Direct",
-        "requested": "[1.0.3, )",
-        "resolved": "1.0.3",
-        "contentHash": "ITDck8Gv/1yv+aolSM/37YH6QBGksa9yNp3p91E1jZY2gI9IYs2WjiX22SW0Yt0Y8ovrPp/OiuQAqAZBYC7Y5Q=="
       }
     }
   }

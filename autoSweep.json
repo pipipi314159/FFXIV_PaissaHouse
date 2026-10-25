@@ -1,12 +1,14 @@
 {
   "Author": "zhudotexe",
-  "Name": "PaissaHouse",
+  "Name": "PaissaHouse (TW)",
   "InternalName": "autoSweep",
-  "Description": "Looking for that perfect house? PaissaHouse lets you receive notifications when a new plot of land is up for sale on your home world.\nView the list of all houses available on a world at https://paissadb.zhu.codes/!\n\nWant to contribute? Check out the repository (globe icon below) for instructions.",
-  "RepoUrl": "https://github.com/zhudotexe/FFXIV_PaissaHouse",
+  "Description": "台服（繁中）移植版。巡房時自動記錄各住宅區的空地與抽籤看板資訊，所有資料只存在本機（不上傳 PaissaDB）。\n/phouse 開啟空地清單視窗，可篩選、排序並匯出 CSV；/psweep 開啟設定。",
+  "RepoUrl": "https://github.com/pipipi314159/FFXIV_PaissaHouse",
   "ApplicableVersion": "any",
   "Tags": [
-    "housing"
+    "housing",
+    "住宅",
+    "抽籤"
   ],
-  "Punchline": "Crowdsourced housing alerts and lottery tracking for all."
+  "Punchline": "台服本機版巡房與抽籤紀錄，可匯出 CSV。"
 }

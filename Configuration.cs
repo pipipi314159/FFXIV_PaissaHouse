@@ -16,12 +16,17 @@ namespace AutoSweep {
         public DistrictNotifConfig Shirogane { get; set; } = new();
         public DistrictNotifConfig Empyrean { get; set; } = new();
 
+        // the notification options below need PaissaDB (cloud) and are unused in the TW port
         public bool HomeworldNotifs { get; set; } = true; // receive alerts for plots on your homeworld
         public bool DatacenterNotifs { get; set; } = false; // receive alerts for plots on all worlds on your data center
         public bool AllNotifs { get; set; } = false; // receive alerts for all worlds
 
         public XivChatType ChatType { get; set; } = XivChatType.Debug;
         public bool ChatSweepAlert { get; set; } = true; // thank the user for contributions in chat/"began sweep"
+
+        // TW port: local data
+        public bool AutoExportCsv { get; set; } = true; // write a CSV after sweeping a whole district
+        public int WardsPerDistrict { get; set; } = Paissa.Utils.DefaultWardsPerDistrict; // TW: 18
         public int Version { get; set; } = 4;
 
         public void Save() {
@@ -56,4 +61,4 @@ namespace AutoSweep {
 
         Custom = 4
     }
-}
+}

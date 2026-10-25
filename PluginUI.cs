@@ -30,7 +30,7 @@ namespace AutoSweep {
         private void DrawSettingsWindow() {
             if (!SettingsVisible) return;
 
-            ImGui.SetNextWindowSize(new Vector2(450, 210), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowSize(new Vector2(450, 290), ImGuiCond.FirstUseEver);
             if (ImGui.Begin("PaissaHouse Configuration", ref settingsVisible,
                     ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)) {
                 // tab bar
@@ -41,7 +41,7 @@ namespace AutoSweep {
                         bool enabled = configuration.Enabled;
                         if (ImGui.Checkbox("Enabled", ref enabled)) configuration.Enabled = enabled;
                         if (ImGui.IsItemHovered())
-                            ImGui.SetTooltip("Enable or disable PaissaHouse. If disabled, it will not look for houses, post ward information to PaissaDB, or send notifications.");
+                            ImGui.SetTooltip("停用時不會記錄巡房與抽籤資料，也不會在聊天欄輸出。");
 
                         // output format
                         OutputFormat outputFormat = configuration.OutputFormat;
@@ -62,21 +62,6 @@ namespace AutoSweep {
                             if (ImGui.InputText("Custom Output Format", ref customOutputFormat, 2000)) configuration.OutputFormatString = customOutputFormat;
                         }
 
-                        // homeworld alerts
-                        bool homeworldNotifs = configuration.HomeworldNotifs;
-                        if (ImGui.Checkbox("Notifications: Homeworld", ref homeworldNotifs)) configuration.HomeworldNotifs = homeworldNotifs;
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Whether or not to receive notifications about new plots for sale on your homeworld.");
-
-                        // datacenter alerts
-                        bool datacenterNotifs = configuration.DatacenterNotifs;
-                        if (ImGui.Checkbox("Notifications: Datacenter", ref datacenterNotifs)) configuration.DatacenterNotifs = datacenterNotifs;
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Whether or not to receive notifications about all new plots for sale on your home data center.");
-
-                        // all world alerts
-                        bool allNotifs = configuration.AllNotifs;
-                        if (ImGui.Checkbox("Notifications: All", ref allNotifs)) configuration.AllNotifs = allNotifs;
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Whether or not to receive notifications about all new plots for sale, regardless of world or data center.");
-
                         // chat type
                         XivChatType outputChatType = configuration.ChatType;
                         if (ImGui.BeginCombo("Output Chat Channel", outputChatType.ToString())) {
@@ -94,15 +79,26 @@ namespace AutoSweep {
                         bool chatSweepAlert = configuration.ChatSweepAlert;
                         if (ImGui.Checkbox("Chat Sweep Notifications", ref chatSweepAlert)) configuration.ChatSweepAlert = chatSweepAlert;
                         if (ImGui.IsItemHovered())
-                            ImGui.SetTooltip("Whether or not PaissaHouse should print information about ward sweeps when viewing housing districts from an aetheryte or ferry.");
+                            ImGui.SetTooltip("從以太之光或渡船查看住宅區時，是否在聊天欄顯示巡房開始與空地摘要。");
+
+                        // TW port: auto CSV export
+                        bool autoExportCsv = configuration.AutoExportCsv;
+                        if (ImGui.Checkbox("巡完整區後自動匯出 CSV", ref autoExportCsv)) configuration.AutoExportCsv = autoExportCsv;
+                        if (ImGui.IsItemHovered())
+                            ImGui.SetTooltip("巡完一個住宅區的全部區數後，把空地清單寫成 CSV（UTF-8，可用 Excel 開啟）。\n輸入 /phouse 開啟空地清單視窗，可從那裡開啟資料夾。");
+
+                        // TW port: wards per district
+                        int wards = configuration.WardsPerDistrict;
+                        ImGui.SetNextItemWidth(120);
+                        if (ImGui.InputInt("每個住宅區的區數", ref wards)) configuration.WardsPerDistrict = Math.Clamp(wards, 1, 60);
+                        if (ImGui.IsItemHovered())
+                            ImGui.SetTooltip("巡完這麼多區就視為巡完整區（顯示摘要、匯出 CSV）。台服目前為 18，日後開放更多區時再調整。");
+
+                        ImGui.Spacing();
+                        ImGui.TextDisabled("台服版：所有資料只存在本機，不會上傳到 PaissaDB。");
 
                         ImGui.EndTabItem();
                     }
-                    DrawTabItemForDistrict("Mist", configuration.Mist);
-                    DrawTabItemForDistrict("The Lavender Beds", configuration.LavenderBeds);
-                    DrawTabItemForDistrict("The Goblet", configuration.Goblet);
-                    DrawTabItemForDistrict("Shirogane", configuration.Shirogane);
-                    DrawTabItemForDistrict("Empyreum", configuration.Empyrean);
                     ImGui.EndTabBar();
                     ImGui.Separator();
                 }
@@ -114,24 +110,6 @@ namespace AutoSweep {
                 }
             }
             ImGui.End();
-        }
-
-        private void DrawTabItemForDistrict(string districtName, DistrictNotifConfig notifConfig) {
-            if (ImGui.BeginTabItem(districtName)) {
-                ImGui.Text($"This tab controls which houses to receive notifications for in {districtName}.\nIt won't affect the output when sweeping the whole district.");
-                bool small = notifConfig.Small;
-                if (ImGui.Checkbox("Small", ref small)) notifConfig.Small = small;
-                bool medium = notifConfig.Medium;
-                if (ImGui.Checkbox("Medium", ref medium)) notifConfig.Medium = medium;
-                bool large = notifConfig.Large;
-                if (ImGui.Checkbox("Large", ref large)) notifConfig.Large = large;
-                ImGui.Separator();
-                bool fc = notifConfig.FreeCompany;
-                if (ImGui.Checkbox("Free Company Purchase Allowed", ref fc)) notifConfig.FreeCompany = fc;
-                bool solo = notifConfig.Individual;
-                if (ImGui.Checkbox("Individual Purchase Allowed", ref solo)) notifConfig.Individual = solo;
-                ImGui.EndTabItem();
-            }
         }
     }
 }
